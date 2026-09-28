@@ -1,0 +1,86 @@
+html = """<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NITRO RACER</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#87b9d8;font-family:Arial,sans-serif;touch-action:none}
+#menu{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111;color:white}
+button{padding:16px 28px;margin:8px;border:0;border-radius:12px;font-size:20px;font-weight:bold}
+#play{background:white}#vr{background:#d00000;color:white}
+#hud{position:fixed;top:12px;left:12px;z-index:5;color:white;font-weight:bold;text-shadow:0 2px 4px #000;display:none}
+#controls{position:fixed;bottom:18px;left:0;right:0;z-index:6;display:none;justify-content:space-between;padding:0 18px}
+.ctrl{width:75px;height:60px;padding:0;background:#ffffffcc}
+#nitro{background:#ff8c00;color:white;width:105px}
+#status{min-height:24px;text-align:center}
+</style>
+</head>
+<body>
+<div id="menu">
+<h1>🏁 NITRO RACER</h1>
+<p>Celular + Meta Quest 2</p>
+<button id="play">JUGAR</button>
+<button id="vr">🥽 ENTRAR EN VR</button>
+<div id="status"></div>
+</div>
+<div id="hud">🏁 Vuelta: 1/3 &nbsp; 💨 Nitro: <span id="n">100</span>%</div>
+<div id="controls">
+<div><button class="ctrl" id="left">◀</button><button class="ctrl" id="right">▶</button></div>
+<button class="ctrl" id="nitro">💨</button>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.min.js"></script>
+<script>
+let scene,camera,renderer,car,steer=0,boost=false,nit=100;
+const $=id=>document.getElementById(id);
+function makeCar(){
+ const g=new THREE.Group();
+ const M=c=>new THREE.MeshStandardMaterial({color:c});
+ let body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.45,3),M(0xd71920));body.position.y=.55;g.add(body);
+ let cabin=new THREE.Mesh(new THREE.BoxGeometry(1.25,.55,1.3),M(0x263746));cabin.position.set(0,1,-.25);g.add(cabin);
+ let glass=new THREE.Mesh(new THREE.BoxGeometry(1.08,.35,1.05),M(0x6d9bad));glass.position.set(0,1.08,-.25);g.add(glass);
+ for(const x of[-.9,.9])for(const z of[-1,1]){
+  let w=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.22,20),M(0x080808));w.rotation.z=Math.PI/2;w.position.set(x,.35,z);g.add(w);
+  let r=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.24,16),M(0xaaaaaa));r.rotation.z=Math.PI/2;r.position.set(x,.35,z);g.add(r);
+ }
+ for(const x of[-.48,.48]){
+  let f=new THREE.Mesh(new THREE.BoxGeometry(.38,.13,.08),new THREE.MeshBasicMaterial({color:0xffffcc}));f.position.set(x,.67,1.52);g.add(f);
+ }
+ return g;
+}
+function setup(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x87b9d8);
+ camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.05,200);
+ renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.xr.enabled=true;
+ document.body.appendChild(renderer.domElement);
+ scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
+ let sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(5,10,5);scene.add(sun);
+ let road=new THREE.Mesh(new THREE.PlaneGeometry(14,200),new THREE.MeshStandardMaterial({color:0x303030}));road.rotation.x=-Math.PI/2;road.position.z=-90;scene.add(road);
+ for(let z=4;z>-190;z-=6){let line=new THREE.Mesh(new THREE.BoxGeometry(.16,.02,2.5),new THREE.MeshBasicMaterial({color:0xffffff}));line.position.set(0,.02,z);scene.add(line)}
+ car=makeCar();car.position.set(0,0,3);scene.add(car);
+ camera.position.set(0,3.2,8);camera.lookAt(0,.7,-8);
+ renderer.setAnimationLoop(()=>{if(car){car.position.x+=steer*.08;car.position.x=Math.max(-5.5,Math.min(5.5,car.position.x));if(boost&&nit>0)nit-=.5;else nit=Math.min(100,nit+.1);$('n').textContent=Math.round(nit);camera.position.lerp(new THREE.Vector3(car.position.x,3.2,car.position.z+7),.08);camera.lookAt(car.position.x,.7,car.position.z-8)}renderer.render(scene,camera)});
+}
+function start(){ $('menu').style.display='none';$('hud').style.display='block';$('controls').style.display='flex';}
+$('play').onclick=start;
+function hold(el,fn){el.addEventListener('pointerdown',e=>{e.preventDefault();fn(true)});['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,()=>fn(false)))}
+hold($('left'),v=>steer=v?-1:0);hold($('right'),v=>steer=v?1:0);hold($('nitro'),v=>boost=v);
+$('vr').onclick=async()=>{
+ $('status').textContent='Iniciando WebXR...';
+ if(!navigator.xr){$('status').textContent='WebXR no está disponible en este navegador.';return}
+ try{
+  let ok=await navigator.xr.isSessionSupported('immersive-vr');
+  if(!ok){$('status').textContent='Este navegador no ofrece VR inmersiva.';return}
+  let s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
+  await renderer.xr.setSession(s);$('menu').style.display='none';$('hud').style.display='block';$('controls').style.display='none';
+  s.addEventListener('end',()=>{$('menu').style.display='flex';$('hud').style.display='none';$('status').textContent=''});
+ }catch(e){$('status').textContent='No se pudo iniciar la VR.';console.error(e)}
+};
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+setup();
+</script>
+</body>
+</html>"""
+path="/mnt/data/index.html"
+with open(path,"w",encoding="utf-8") as f: f.write(html)
+print(path)
